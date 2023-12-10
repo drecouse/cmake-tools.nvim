@@ -12,7 +12,7 @@ local trouble = {
 }
 
 function trouble.scroll_to_bottom()
-      troub.last({skip_groups = true, jump = true})
+      troub.last({skip_groups = true, jump = false})
 end
 
 local function append_to_trouble(encoding, error, data)
