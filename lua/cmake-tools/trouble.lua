@@ -1,49 +1,49 @@
 local log = require("cmake-tools.log")
 local Job = require("plenary.job")
-local trouble = require("trouble")
+local troub = require("trouble")
 
----@alias quickfix_show '"always"'|'"only_on_error"'
----@alias quickfix_position '"belowright"'|'"bottom"'|'"top"'
----@alias quickfix_opts_type {show:quickfix_show, position:quickfix_position, size:number}
+---@alias trouble_show '"always"'|'"only_on_error"'
+---@alias trouble_position '"belowright"'|'"bottom"'|'"top"'
+---@alias trouble_opts_type {show:trouble_show, position:trouble_position, size:number}
 --
----@class quickfix : executor
-local quickfix = {
+---@class trouble : executor
+local trouble = {
   job = nil,
 }
 
-function quickfix.scroll_to_bottom()
-      trouble.last({skip_groups = true, jump = true})
+function trouble.scroll_to_bottom()
+      troub.last({skip_groups = true, jump = true})
 end
 
-local function append_to_quickfix(encoding, error, data)
+local function append_to_trouble(encoding, error, data)
   local line = error and error or data
   if encoding ~= "utf-8" then
     line = vim.fn.iconv(line, encoding, "utf-8")
   end
 
   vim.fn.setqflist({}, "a", { lines = { line } })
-  -- scroll the quickfix buffer to bottom
-  if quickfix.check_scroll() then
-    quickfix.scroll_to_bottom()
+  -- scroll the trouble buffer to bottom
+  if trouble.check_scroll() then
+    trouble.scroll_to_bottom()
   end
 end
 
-function quickfix.show(opts)
-  trouble.open("quickfix")
+function trouble.show(opts)
+  troub.open("quickfix")
   vim.api.nvim_command("wincmd p")
 end
 
-function quickfix.close(opts)
-  trouble.close("quickfix")
+function trouble.close(opts)
+  troub.close("quickfix")
 end
 
-function quickfix.run(cmd, env_script, env, args, cwd, opts, on_exit, on_output)
+function trouble.run(cmd, env_script, env, args, cwd, opts, on_exit, on_output)
   vim.fn.setqflist({}, " ", { title = cmd .. " " .. table.concat(args, " ") })
   if opts.show == "always" then
-    quickfix.show(opts)
+    trouble.show(opts)
   end
 
-  -- NOTE: Unused env_script for quickfix.run() as plenary does not yet support running scripts
+  -- NOTE: Unused env_script for trouble.run() as plenary does not yet support running scripts
 
   local job_args = {}
 
@@ -61,26 +61,26 @@ function quickfix.run(cmd, env_script, env, args, cwd, opts, on_exit, on_output)
     job_args = args
   end
 
-  quickfix.job = Job:new({
+  trouble.job = Job:new({
     command = cmd,
     args = job_args,
     cwd = cwd,
     on_stdout = vim.schedule_wrap(function(err, data)
-      append_to_quickfix(opts.encoding, err, data)
+      append_to_trouble(opts.encoding, err, data)
       on_output(data, err)
     end),
     on_stderr = vim.schedule_wrap(function(err, data)
-      append_to_quickfix(opts.encoding, err, data)
+      append_to_trouble(opts.encoding, err, data)
       on_output(data, err)
     end),
     on_exit = vim.schedule_wrap(function(_, code, signal)
       code = signal == 0 and code or 128 + signal
       local msg = "Exited with code " .. code
 
-      append_to_quickfix(opts.encoding, msg)
+      append_to_trouble(opts.encoding, msg)
       if code ~= 0 and opts.show == "only_on_error" then
-        quickfix.show(opts)
-        quickfix.scroll_to_bottom()
+        trouble.show(opts)
+        trouble.scroll_to_bottom()
       end
       if on_exit ~= nil then
         on_exit(code)
@@ -88,36 +88,36 @@ function quickfix.run(cmd, env_script, env, args, cwd, opts, on_exit, on_output)
     end),
   })
 
-  quickfix.job:start()
+  trouble.job:start()
 end
 
 ---Checks if there is an active job
----@param opts quickfix_opts_type options for this adapter
+---@param opts trouble_opts_type options for this adapter
 ---@return boolean
-function quickfix.has_active_job(opts)
-  if not quickfix.job or quickfix.job.is_shutdown then
+function trouble.has_active_job(opts)
+  if not trouble.job or trouble.job.is_shutdown then
     return false
   end
   log.error(
     "A CMake task is already running: "
-      .. quickfix.job.command
+      .. trouble.job.command
       .. " Stop it before trying to run a new CMake task."
   )
   return true
 end
 
 ---Stop the active job
----@param opts quickfix_opts_type options for this adapter
+---@param opts trouble_opts_type options for this adapter
 ---@return nil
-function quickfix.stop(opts)
-  quickfix.job:shutdown(1, 9)
+function trouble.stop(opts)
+  trouble.job:shutdown(1, 9)
 
-  for _, pid in ipairs(vim.api.nvim_get_proc_children(quickfix.job.pid)) do
+  for _, pid in ipairs(vim.api.nvim_get_proc_children(trouble.job.pid)) do
     vim.loop.kill(pid, 9)
   end
 end
 
-function quickfix.check_scroll()
+function trouble.check_scroll()
   local function is_cursor_at_last_line()
     local current_buf = vim.api.nvim_win_get_buf(0)
     local cursor_pos = vim.api.nvim_win_get_cursor(0)
@@ -128,15 +128,15 @@ function quickfix.check_scroll()
 
   local buffer_type = vim.api.nvim_buf_get_option(0, "buftype")
 
-  if buffer_type == "quickfix" then
+  if buffer_type == "trouble" then
     return is_cursor_at_last_line()
   end
 
   return true
 end
 
-function quickfix.is_installed()
-  return true
+function trouble.is_installed()
+  return troub ~= nil
 end
 
-return quickfix
+return trouble
