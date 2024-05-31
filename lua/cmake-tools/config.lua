@@ -18,15 +18,15 @@ local Config = {
   build_preset = nil,
   base_settings = {
     env = {},
-    build_dir = nil,
+    build_dir = "",
     working_dir = "${dir.binary}",
+    use_preset = true,
     generate_options = {},
     build_options = {},
   }, -- general config
   target_settings = {}, -- target specific config
   executor = nil,
-  terminal = nil,
-  always_use_terminal = false,
+  runner = nil,
   env_script = " ",
   cwd = vim.loop.cwd(),
 }
@@ -36,14 +36,14 @@ function Config:new(const)
   setmetatable(obj, self)
   self.__index = self
 
-  self:update_build_dir(const.cmake_build_directory)
+  self:update_build_dir(const.cmake_build_directory, const.cmake_build_directory)
 
   self.base_settings.generate_options = const.cmake_generate_options
   self.base_settings.build_options = const.cmake_build_options
+  self.base_settings.use_preset = const.cmake_use_preset
 
   self.executor = const.cmake_executor
-  self.terminal = const.cmake_terminal
-  self.always_use_terminal = self.executor.name == "terminal"
+  self.runner = const.cmake_runner
 
   return self
 end
@@ -56,7 +56,28 @@ function Config:has_build_directory()
   return self.build_directory and self.build_directory:exists()
 end
 
-function Config:update_build_dir(build_dir)
+function Config:no_expand_build_directory_path()
+  return self.base_settings.build_dir
+end
+
+---comment
+---@param build_dir string|function string or a function returning string containing path to the build dir
+---@param no_expand_build_dir string|function
+function Config:update_build_dir(build_dir, no_expand_build_dir)
+  if type(build_dir) == "function" then
+    build_dir = build_dir()
+  end
+  if type(build_dir) ~= "string" then
+    error("build_dir needs to be a string or function returning string path to the build_directory")
+  end
+  if type(no_expand_build_dir) == "function" then
+    no_expand_build_dir = no_expand_build_dir()
+  end
+  if type(no_expand_build_dir) ~= "string" then
+    error(
+      "no_expand_build_dir needs to be a string or function returning string path to the build_directory"
+    )
+  end
   local build_path = Path:new(build_dir)
   if build_path:is_absolute() then
     self.build_directory = Path:new(build_dir)
@@ -68,7 +89,40 @@ function Config:update_build_dir(build_dir)
     self.reply_directory = Path:new(self.cwd, build_dir, ".cmake", "api", "v1", "reply")
   end
 
-  self.base_settings.build_dir = build_path:absolute()
+  self.base_settings.build_dir = Path:new(no_expand_build_dir):absolute()
+end
+
+---Prepare build directory. Which allows macro expansion.
+---@param kits table all the kits
+function Config:prepare_build_directory(kits)
+  -- macro expansion:
+  --       ${kit}
+  --       ${kitGenerator}
+  --       ${variant:xx}
+  -- get the detailed info of the selected kit
+  local build_dir = self:no_expand_build_directory_path()
+  local kit = self.kit
+  local variant = self.variant
+  local kit_info = nil
+  if kits then
+    for _, item in ipairs(kits) do
+      if item.name == kit then
+        kit_info = item
+      end
+    end
+  end
+  build_dir = build_dir:gsub("${kit}", kit_info and kit_info.name or "")
+  build_dir = build_dir:gsub("${kitGenerator}", kit_info and kit_info.generator or "")
+
+  build_dir = build_dir:gsub("${variant:(%w+)}", function(v)
+    if variant and variant[v] then
+      return variant[v]
+    end
+
+    return ""
+  end)
+
+  return build_dir
 end
 
 function Config:generate_options()
@@ -302,6 +356,7 @@ end
 
 local function get_targets(config, opt)
   local targets, display_targets, paths, abs_paths = {}, {}, {}, {}
+  local sources = {}
   if opt.has_all then
     table.insert(targets, "all")
     table.insert(display_targets, "all")
@@ -340,14 +395,33 @@ local function get_targets(config, opt)
           table.insert(abs_paths, abs_path)
         end
       end
+      if opt.query_sources then -- get all source files related to this target
+        for _, source in ipairs(target_info["sources"]) do
+          local source_abs_path = config.cwd .. "/" .. source["path"]
+          table.insert(
+            sources,
+            { path = source_abs_path, type = type, name = target_name, display_name = display_name }
+          )
+        end
+      end
     end
   end
 
-  return Result:new(
-    Types.SUCCESS,
-    { targets = targets, display_targets = display_targets, paths = paths, abs_paths = abs_paths },
-    "Success!"
-  )
+  if opt.query_sources then
+    return Result:new(Types.SUCCESS, {
+      targets = targets,
+      display_targets = display_targets,
+      paths = paths,
+      abs_paths = abs_paths,
+      sources = sources,
+    }, "Success!")
+  else
+    return Result:new(
+      Types.SUCCESS,
+      { targets = targets, display_targets = display_targets, paths = paths, abs_paths = abs_paths },
+      "Success!"
+    )
+  end
 end
 
 function Config:get_code_model_info()
@@ -373,6 +447,14 @@ end
 
 function Config:build_targets()
   return get_targets(self, { has_all = true, only_executable = false })
+end
+
+function Config:launch_targets_with_sources()
+  return get_targets(self, { has_all = false, only_executable = true, query_sources = true })
+end
+
+function Config:build_targets_with_sources()
+  return get_targets(self, { has_all = false, only_executable = false, query_sources = true })
 end
 
 return Config

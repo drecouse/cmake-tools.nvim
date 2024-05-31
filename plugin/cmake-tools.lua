@@ -2,8 +2,6 @@
 -- This plugin is intended to support cmake integration in neovim.
 
 local cmake_tools = require("cmake-tools")
-local has_nvim_dap, _ = pcall(require, "dap")
-local has_telescope, _ = pcall(require, "telescope")
 
 ---------------- Commands ------------------
 
@@ -60,28 +58,53 @@ vim.api.nvim_create_user_command(
 )
 --- CMake stop
 vim.api.nvim_create_user_command(
-  "CMakeStop", -- name
-  cmake_tools.stop, -- command
+  "CMakeStopExecutor", -- name
+  cmake_tools.stop_executor, -- command
   { -- opts
-    desc = "CMake stop",
+    desc = "CMake stop executor",
+  }
+)
+vim.api.nvim_create_user_command(
+  "CMakeStopRunner", -- name
+  cmake_tools.stop_runner, -- command
+  { -- opts
+    desc = "CMake stop runner",
   }
 )
 
---- CMake close
+--- CMake close executor
 vim.api.nvim_create_user_command(
-  "CMakeClose", -- name
-  cmake_tools.close, -- command
+  "CMakeCloseExecutor", -- name
+  cmake_tools.close_executor, -- command
   { -- opts
-    desc = "Close CMake quickfix window",
+    desc = "Close CMake executor window",
   }
 )
 
---- CMake open
+--- CMake close runner
 vim.api.nvim_create_user_command(
-  "CMakeOpen", -- name
-  cmake_tools.open, -- command
+  "CMakeCloseRunner", -- name
+  cmake_tools.close_runner, -- command
   { -- opts
-    desc = "Open CMake quickfix window",
+    desc = "Close CMake runner window",
+  }
+)
+
+--- CMake open executor
+vim.api.nvim_create_user_command(
+  "CMakeOpenExecutor", -- name
+  cmake_tools.open_executor, -- command
+  { -- opts
+    desc = "Open CMake executor window",
+  }
+)
+
+--- CMake open runner
+vim.api.nvim_create_user_command(
+  "CMakeOpenRunner", -- name
+  cmake_tools.open_runner, -- command
+  { -- opts
+    desc = "Open CMake runner window",
   }
 )
 
@@ -105,6 +128,26 @@ vim.api.nvim_create_user_command(
   }
 )
 
+--- CMake run current file
+vim.api.nvim_create_user_command(
+  "CMakeRunCurrentFile", -- name
+  cmake_tools.run_current_file, -- command
+  { -- opts
+    nargs = "*",
+    desc = "CMake run current file",
+  }
+)
+
+--- CMake build current file
+vim.api.nvim_create_user_command(
+  "CMakeBuildCurrentFile", -- name
+  cmake_tools.build_current_file, -- command
+  { -- opts
+    nargs = "*",
+    desc = "CMake build current file",
+  }
+)
+
 --- CMake launch args
 vim.api.nvim_create_user_command(
   "CMakeLaunchArgs", -- name
@@ -114,28 +157,6 @@ vim.api.nvim_create_user_command(
     desc = "CMake launch args",
   }
 )
-
-if has_nvim_dap then
-  --- CMake debug
-  vim.api.nvim_create_user_command(
-    "CMakeDebug", -- name
-    cmake_tools.debug, -- command
-    { -- opts
-      nargs = "*",
-      desc = "CMake debug",
-    }
-  )
-
-  --- CMake quick debug
-  vim.api.nvim_create_user_command(
-    "CMakeQuickDebug", -- name
-    cmake_tools.quick_debug, -- command
-    { -- opts
-      nargs = "*",
-      desc = "CMake quick debug",
-    }
-  )
-end
 
 --- CMake select build type
 vim.api.nvim_create_user_command(
@@ -216,18 +237,6 @@ vim.api.nvim_create_user_command(
   }
 )
 
-if has_telescope then
-  --- CMake show files
-  vim.api.nvim_create_user_command(
-    "CMakeShowTargetFiles", -- name
-    cmake_tools.show_target_files, -- command
-    { -- opts
-      nargs = "*",
-      desc = "CMake show cmake model files or target",
-    }
-  )
-end
-
 --- CMake select cwd (source dir)
 vim.api.nvim_create_user_command(
   "CMakeSelectCwd", -- name
@@ -245,5 +254,24 @@ vim.api.nvim_create_user_command(
   { -- opts
     nargs = "?",
     desc = "CMake select build dir",
+  }
+)
+
+--- CMake run tests
+vim.api.nvim_create_user_command(
+  "CMakeRunTest", -- name
+  cmake_tools.run_test, -- command
+  { -- opts
+    nargs = "*",
+    desc = "CMake run test",
+  }
+)
+--- CMake quick start
+vim.api.nvim_create_user_command(
+  "CMakeQuickStart", -- name
+  require("cmake-tools.quickstart").quick_start, -- command
+  { -- opts
+    nargs = 0,
+    desc = "CMake run quickstart",
   }
 )
