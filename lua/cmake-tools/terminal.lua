@@ -40,10 +40,12 @@ function _terminal.show(opts)
   if win_id ~= -1 then
     -- The window is alive, so we set buffer in window
     vim.api.nvim_win_set_buf(win_id, _terminal.id)
-    if opts.split_direction == "horizontal" then
-      vim.api.nvim_win_set_height(win_id, opts.split_size)
-    else
-      vim.api.nvim_win_set_width(win_id, opts.split_size)
+    if opts.auto_resize then
+      if opts.split_direction == "horizontal" then
+        vim.api.nvim_win_set_height(win_id, opts.split_size)
+      else
+        vim.api.nvim_win_set_width(win_id, opts.split_size)
+      end
     end
   elseif win_id >= -1 then
     -- The window is not active, we need to create a new buffer
@@ -63,6 +65,11 @@ function _terminal.new_instance(term_name, opts)
   vim.cmd(":" .. opts.split_direction .. " " .. opts.split_size .. "sp | :term") -- Creater terminal in a split
   -- local new_name = vim.fn.fnamemodify(term_name, ":t")                           -- Extract only the terminal name and reassign it
   vim.api.nvim_buf_set_name(vim.api.nvim_get_current_buf(), term_name) -- Set the buffer name
+  if opts.split_direction == "horizontal" then
+    vim.wo.winfixheight = true
+  else
+    vim.wo.winfixwidth = true
+  end
   vim.cmd(":setlocal laststatus=3") -- Let there be a single status/lualine in the neovim instance
 
   -- Renamming a terminal buffer creates a new hidden buffer, so duplicate terminals need to be deleted
@@ -165,10 +172,12 @@ function _terminal.send_data_to_terminal(buffer_idx, cmd, opts)
   if opts and opts.win_id ~= -1 then
     -- The window is alive, so we set buffer in window
     vim.api.nvim_win_set_buf(opts.win_id, buffer_idx)
-    if opts.split_direction == "horizontal" then
-      vim.api.nvim_win_set_height(opts.win_id, opts.split_size)
-    else
-      vim.api.nvim_win_set_width(opts.win_id, opts.split_size)
+    if opts.auto_resize then
+      if opts.split_direction == "horizontal" then
+        vim.api.nvim_win_set_height(opts.win_id, opts.split_size)
+      else
+        vim.api.nvim_win_set_width(opts.win_id, opts.split_size)
+      end
     end
   elseif opts and opts.win_id >= -1 then
     -- The window is not active, we need to create a new buffer
@@ -537,20 +546,33 @@ local create_lock_file = function()
   create_tmp_file(".lock")
 end
 
+local is_fish_shell = function()
+  local shell = vim.o.shell
+  return string.find(shell, "fish")
+end
+
 ---creates command that handles all of our post command stuff for on_exit handling
 ---@return string
 local get_command_handling_on_exit = function()
   local exit_code_file_path = get_last_exit_code_file_path()
   local lock_file_path = get_lock_file_path()
 
+  local exit_op = "$?"
+  local escape_rm = " \\rm -f "
+
+  if is_fish_shell() then
+    exit_op = "$status"
+    escape_rm = " command rm -f "
+  end
+
   if osys.iswin32 then
-    -- Normalize paths for Windows
+    exit_op = "%errorlevel%"
+    escape_rm = " del /Q "
     exit_code_file_path = exit_code_file_path:gsub("/", "\\")
     lock_file_path = lock_file_path:gsub("/", "\\")
-    return "echo %errorlevel% > " .. exit_code_file_path .. " && del /Q " .. lock_file_path
-  else
-    return "echo $? > " .. exit_code_file_path .. "&& \\rm -f " .. lock_file_path
   end
+
+  return "echo " .. exit_op .. " > " .. exit_code_file_path .. " &&" .. escape_rm .. lock_file_path
 end
 
 ---tries to read the number stored in get_last_exit_code_file_path() file
@@ -615,6 +637,7 @@ function _terminal.run(cmd, env_script, env, args, cwd, opts, on_exit, on_output
       split_size = opts.split_size,
       start_insert = opts.start_insert,
       focus = opts.focus,
+      auto_resize = opts.auto_resize,
       do_not_add_newline = opts.do_not_add_newline,
     }
   )

@@ -33,19 +33,18 @@ local Config = {
 
 function Config:new(const)
   local obj = {}
-  setmetatable(obj, self)
-  self.__index = self
+  setmetatable(obj, { __index = self }) -- when obj cannot find key in its table, it will try to find it from its __index value
 
-  self:update_build_dir(const.cmake_build_directory, const.cmake_build_directory)
+  obj:update_build_dir(const.cmake_build_directory, const.cmake_build_directory)
 
-  self.base_settings.generate_options = const.cmake_generate_options
-  self.base_settings.build_options = const.cmake_build_options
-  self.base_settings.use_preset = const.cmake_use_preset
+  obj.base_settings.generate_options = const.cmake_generate_options
+  obj.base_settings.build_options = const.cmake_build_options
+  obj.base_settings.use_preset = const.cmake_use_preset
 
-  self.executor = const.cmake_executor
-  self.runner = const.cmake_runner
+  obj.executor = const.cmake_executor
+  obj.runner = const.cmake_runner
 
-  return self
+  return obj
 end
 
 function Config:build_directory_path()
@@ -56,6 +55,8 @@ function Config:has_build_directory()
   return self.build_directory and self.build_directory:exists()
 end
 
+---comment
+---The reason for storing no expand build directory is to make cwd selecting easier
 function Config:no_expand_build_directory_path()
   return self.base_settings.build_dir
 end
@@ -278,7 +279,7 @@ function Config:get_launch_target()
   end
   local target_info = check_result.data
 
-  return Config:get_launch_target_from_info(target_info)
+  return self:get_launch_target_from_info(target_info)
 end
 
 -- Check if build target exists
@@ -453,8 +454,17 @@ function Config:launch_targets_with_sources()
   return get_targets(self, { has_all = false, only_executable = true, query_sources = true })
 end
 
+local _virtual_targets = nil
+function Config:update_targets()
+  _virtual_targets =
+    get_targets(self, { has_all = false, only_executable = false, query_sources = true })
+end
+
 function Config:build_targets_with_sources()
-  return get_targets(self, { has_all = false, only_executable = false, query_sources = true })
+  if not _virtual_targets then
+    self:update_targets()
+  end
+  return _virtual_targets
 end
 
 return Config
